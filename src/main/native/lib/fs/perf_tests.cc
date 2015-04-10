@@ -10,11 +10,11 @@
 #include <random>
 
 //default to reading 1MB blocks for linear scans
+static const size_t KB = 1024;
 static const size_t MB = 1024 * 1024;
 
-struct scan_info;
 
-struct seek_info{
+struct seek_info {
   seek_info() : seek_count(0), fail_count(0), runtime(0) {};
   std::string str() {
     std::stringstream ss;
@@ -33,29 +33,24 @@ seek_info single_threaded_random_seek(hdfsFS fs, hdfsFile file,
                                       off_t window_max = 64 * MB); //max offset into file
 
 
-/*
 struct scan_info {
-  scan_info(std::int64_t read_count) : read_bytes(read_count) {};
-  std::int64_t read_bytes;
+  scan_info() : read_bytes(0), runtime(0.0) {};
+  std::string str() {
+    std::stringstream ss;
+    ss << "read " << read_bytes << "bytes in " << runtime << " seconds, bandwidth " << read_bytes / runtime / MB << "MB/s";
+    return ss.str();
+  }
+
+  uint64_t read_bytes;
+  double runtime;
 };
 
-scan_info single_threaded_scan(hdfsFS fs, hdfsFile file, std::vector<char>& buffer){
-  std::int64_t read_count = 0;
-  while(1) {
-    std::int64_t read_bytes = hdfsPread(fs, file, read_count, reinterpret_cast<void*>(&buffer[0]), 10);
-    if(read_bytes < 0) {
-      std::cout << "error after reading " << read_count << " bytes" << std::endl;
-      return scan_info(read_count); 
-    } else if (read_bytes == 0) {
-      std::cout << "finished reading, read " << read_count << " bytes" << std::endl;
-      return scan_info(read_count);
-    } else {
-      read_count += read_bytes;
-    }
-  }
-  return scan_info(-1);
-}
-*/
+scan_info single_threaded_linear_scan(hdfsFS fs, hdfsFile file,
+                                      size_t read_size = 128 * KB,
+                                      off_t start = 0,      //where in file to start reading
+                                      off_t end = 64 * MB); //byte offset in file to stop reading
+
+
 
 int main(int argc, char **argv) {
   if(argc != 4) {
@@ -65,59 +60,11 @@ int main(int argc, char **argv) {
 
   hdfsFS fs = hdfsConnect(argv[1], std::atoi(argv[2]));  
   hdfsFile file = hdfsOpenFile(fs, argv[3], 0, 0, 0, 0);
-  std::vector<char> buffer;
-  buffer.reserve(MB);
 
-  /* single threaded sequential reads
-  std::chrono::time_point<std::chrono::system_clock> start, end;
+  scan_info s = single_threaded_linear_scan(fs, file);
 
-  start = std::chrono::system_clock::now();
-
-  
-  unsigned long long total = 0;
-  while(total <= MB * 64) {
-    long long count = hdfsPread(fs, file, total, &buffer[0], MB);
-    //std::cout << "read " << total << std::endl;
-    if(count <= 0)
-      break;
-    total += count;
-  }
-
-  end = std::chrono::system_clock::now();
-
-  std::chrono::duration<double> elapsed = end - start;
-
-  double bandwidth = double(total) / elapsed.count() / (1024.0 * 1024.0);
-
-  std::cout << "read " << total << " bytes in " << elapsed.count() << " seconds" << std::endl;
-  std::cout << bandwidth << "MB/s" << std::endl;
-  */
-
-
-  std::chrono::time_point<std::chrono::system_clock> start, end;
-
-  start = std::chrono::system_clock::now();  
-
-  std::int64_t count = 0 * MB;
-  while(count <= 64 * MB) {
-    std::int64_t read_bytes = hdfsPread(fs, file, count, &buffer[0], MB);
-    //std::cout << "count = " << count << " last read = " << read_bytes << std::endl;
-
-    if(read_bytes <= 0)
-      break;
-    else
-      count += read_bytes;
-  }
-
-  end = std::chrono::system_clock::now();
-  std::chrono::duration<double> dt = end - start;
-
-  double bandwidth = double(count) / dt.count() / double(MB);
-  std::cout << "read " << count << " bytes at " << bandwidth << "MB/s"; 
-   
-
-  //seek_info s = single_threaded_random_seek(fs, file, 3000);
-  //std::cout << s.str() << std::endl;
+  std::cout << std::endl << s.str() << std::endl;
+    
 
   return 0;
 }
@@ -153,5 +100,34 @@ seek_info single_threaded_random_seek(hdfsFS fs, hdfsFile file, unsigned int cou
 }
 
 
+
+scan_info single_threaded_linear_scan(hdfsFS fs, hdfsFile file, size_t buffsize, off_t start_offset, off_t end_offset) {
+  scan_info info;
+
+  std::vector<char> buffer;
+  buffer.reserve(buffsize);
+
+  std::chrono::time_point<std::chrono::system_clock> start, end;
+  start = std::chrono::system_clock::now();  
+
+  std::int64_t count = start_offset;
+  while(count <= end_offset) {
+    std::int64_t read_bytes = hdfsPread(fs, file, count, &buffer[0], buffsize);
+    if(read_bytes <= 0) {
+      //todo: add some retry logic to step over block boundary
+      break;
+    } else {
+      count += read_bytes;
+    }
+  }
+
+  end = std::chrono::system_clock::now();
+  std::chrono::duration<double> dt = end - start;
+
+  info.read_bytes = count - start_offset;
+  info.runtime = dt.count();
+ 
+  return info;  
+}
 
 
