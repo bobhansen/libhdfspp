@@ -94,9 +94,30 @@ int main(int argc, char **argv) {
   */
 
 
+  std::chrono::time_point<std::chrono::system_clock> start, end;
 
-  seek_info s = single_threaded_random_seek(fs, file, 3000);
-  std::cout << s.str() << std::endl;
+  start = std::chrono::system_clock::now();  
+
+  std::int64_t count = 0 * MB;
+  while(count <= 64 * MB) {
+    std::int64_t read_bytes = hdfsPread(fs, file, count, &buffer[0], MB);
+    //std::cout << "count = " << count << " last read = " << read_bytes << std::endl;
+
+    if(read_bytes <= 0)
+      break;
+    else
+      count += read_bytes;
+  }
+
+  end = std::chrono::system_clock::now();
+  std::chrono::duration<double> dt = end - start;
+
+  double bandwidth = double(count) / dt.count() / double(MB);
+  std::cout << "read " << count << " bytes at " << bandwidth << "MB/s"; 
+   
+
+  //seek_info s = single_threaded_random_seek(fs, file, 3000);
+  //std::cout << s.str() << std::endl;
 
   return 0;
 }
@@ -126,11 +147,7 @@ seek_info single_threaded_random_seek(hdfsFS fs, hdfsFile file, unsigned int cou
 
   end = std::chrono::system_clock::now();
   std::chrono::duration<double> elapsed = end - start;
-  double t = elapsed.count();
-  //std::cout << "completed " << info.seek_count << " in " << t << " seconds";
-  //std::cout << t / (double)nseeks * 1000 << "ms per seek" << std::endl;
-
-  info.runtime = t;
+  info.runtime = elapsed.count();
 
   return info;
 }
