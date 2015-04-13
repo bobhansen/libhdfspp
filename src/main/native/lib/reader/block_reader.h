@@ -34,6 +34,7 @@ class RemoteBlockReader {
       : stream_(stream)
       , state_(kOpen)
       , options_(options)
+      , chunk_padding_bytes_(0)
   {}
 
   template<class MutableBufferSequence, class ReadHandler>
@@ -58,12 +59,14 @@ class RemoteBlockReader {
  private:
   struct ReadPacketHeader;
   struct ReadChecksum;
+  struct ReadPadding;
   template<class MutableBufferSequence>
   struct ReadData;
   struct AckRead;
   enum State {
     kOpen,
     kReadPacketHeader,
+    kReadPadding,
     kReadData,
     kFinished,
   };
@@ -73,7 +76,8 @@ class RemoteBlockReader {
   State state_;
   BlockReaderOptions options_;
   size_t packet_len_;
-  size_t packet_read_bytes_;
+  int packet_data_read_bytes_;
+  int chunk_padding_bytes_;
   long long bytes_to_read_;
   std::vector<char> checksum_;
 };
