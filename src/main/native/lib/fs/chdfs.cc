@@ -28,13 +28,30 @@
 
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <pthread.h>
 
 #include "libhdfs++/chdfs.h"
 #include "libhdfs++/hdfs.h"
+#include <sstream>  //for logs
+#include <fstream>  //for logs
+
 
 #include <iostream>
 #include <string>
 #include <thread>
+
+
+
+
+void log(const std::string& str) {
+  #ifdef CHDFS_LOGGING
+  std::fstream fstr;
+  fstr.open("/home/jclampffer/Desktop/chdfs.log", std::fstream::out | std::fstream::app);
+  fstr << str << std::endl;
+  fstr.close();
+  #endif
+}
+
 
 
 
@@ -44,26 +61,45 @@
 
 using namespace hdfs;
 
-/*  Currently copied directly from inputstream_test.cc
- *  -Going to want to be able to specifiy how many threads the io_service uses
- */
+
+void *call_run(void *servicePtr) {
+  IoService *wrappedService = reinterpret_cast<IoService*>(servicePtr);
+  log("background thread about to call run");
+  wrappedService->Run();
+  return NULL;
+}
+
 class Executor {
 public:
-  Executor()
-      : io_service_(IoService::New())
-      , thread_(std::bind(&IoService::Run, io_service_.get()))
-  {}
+  Executor() {
+    //Create a new IoService object. This wraps the boost io_service object.
+    io_service_ = std::unique_ptr<IoService>(IoService::New());
+    //Call run on IoService object in a background thread, the run call should never return.
+    int ret = pthread_create(&processing_thread, NULL, call_run, reinterpret_cast<void*>(io_service_.get()));
+    
+    //log for debug
+    std::stringstream ss;
+    ss << "background thread should be started, pthread_create returned " << ret << " and thread id is " << (unsigned long long)processing_thread;
+    log(ss.str());
 
-  IoService *io_service() { return io_service_.get(); }
+    if(ret != 0) {
+      throw std::runtime_error("unable to start pthread?");
+    }
+  }
 
   ~Executor() {
-    io_service_->Stop();
-    thread_.join();
+    //stop IoService event loop and background thread.  Don't need this yet
+    log("~Executor called, this should not be happening in vertica yet.");
+  }
+ 
+  IoService *io_service() {
+    return io_service_.get();
   }
 
   std::unique_ptr<IoService> io_service_;
-  std::thread thread_;
+  pthread_t processing_thread;  
 };
+
 
 
 struct hdfsFile_struct {
@@ -112,6 +148,10 @@ hdfsFS hdfsConnect(const char *nnhost, unsigned short nnport) {
   if(!stat.ok()){
     return NULL;
   }
+
+  std::stringstream ss;
+  ss << "hdfsConnect called. host=" << nnhost << " port=" << nnport << "addressof filesystem = " << reinterpret_cast<unsigned long long>(fileSystem);
+  log(ss.str());
 
   //make a hdfsFS handle
   return new hdfsFS_struct(fileSystem, background_io_service.release());
