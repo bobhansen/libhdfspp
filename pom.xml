@@ -26,8 +26,8 @@
 
   <properties>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-    <protobuf.version>2.5.0</protobuf.version>
-    <hadoop.version>3.0.0-SNAPSHOT</hadoop.version>
+    <protobuf.version>2.6.0</protobuf.version>
+    <hadoop.version>2.6.0</hadoop.version>
   </properties>
 
   <dependencyManagement>
@@ -160,6 +160,8 @@
             <configuration>
               <javahPath>${env.JAVA_HOME}/bin/javah</javahPath>
               <javahClassNames>
+                <javahClassName>me.haohui.libhdfspp.NativeFileSystem</javahClassName>
+                <javahClassName>me.haohui.libhdfspp.NativeInputStream</javahClassName>
                 <javahClassName>me.haohui.libhdfspp.NativeIoService</javahClassName>
                 <javahClassName>me.haohui.libhdfspp.NativeTcpConnection</javahClassName>
                 <javahClassName>me.haohui.libhdfspp.NativeRemoteBlockReader</javahClassName>
