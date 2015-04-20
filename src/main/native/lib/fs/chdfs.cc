@@ -89,7 +89,7 @@ public:
 
   ~Executor() {
     //stop IoService event loop and background thread.  Don't need this yet
-    log("~Executor called, this should not be happening in vertica yet.");
+    log("~Executor called, this should not be happening yet.");
   }
  
   IoService *io_service() {
