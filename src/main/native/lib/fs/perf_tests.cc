@@ -8,6 +8,16 @@
 #include <vector>
 #include <chrono>
 #include <random>
+#include <thread>
+
+
+/*
+    For now everything is hard coded to start scan_thread_count threads that each do a sequential scan over a file in hdfs.
+    Default is to read 32MB whole packets at a time.  This should reproduce the deadlock issue.
+*/
+
+const int scan_thread_count = 8;
+
 
 //default to reading 1MB blocks for linear scans
 static const size_t KB = 1024;
@@ -27,12 +37,6 @@ struct seek_info {
   double runtime;
 };
 
-seek_info single_threaded_random_seek(hdfsFS fs, hdfsFile file, 
-                                      unsigned int count = 1000,   //how many seeks to try
-                                      off_t window_min = 0,        //minimum offset into file
-                                      off_t window_max = 64 * MB); //max offset into file
-
-
 struct scan_info {
   scan_info() : read_bytes(0), runtime(0.0) {};
   std::string str() {
@@ -45,11 +49,67 @@ struct scan_info {
   double runtime;
 };
 
+
+seek_info single_threaded_random_seek(hdfsFS fs, hdfsFile file, 
+                                      unsigned int count = 1000,   //how many seeks to try
+                                      off_t window_min = 0,        //minimum offset into file
+                                      off_t window_max = 64 * MB); //max offset into file
+
 scan_info single_threaded_linear_scan(hdfsFS fs, hdfsFile file,
                                       size_t read_size = 128 * KB,
                                       off_t start = 0,      //where in file to start reading
                                       off_t end = 64 * MB); //byte offset in file to stop reading
 
+
+struct scanner {
+  hdfsFS fs;
+  hdfsFile file;
+  size_t read_size;
+  off_t start;
+  off_t end;
+
+  //out
+  scan_info info;
+
+  scanner(hdfsFS fs, hdfsFile file, size_t read_size, off_t start, off_t end) : fs(fs), file(file), read_size(read_size), 
+                                                                                start(start), end(end) {};
+  void operator()(){
+    info = single_threaded_linear_scan(fs, file, read_size, start, end);
+    std::cout << info.str() << std::endl;
+  }
+
+  scan_info getResult(){
+    return info;
+  }
+};
+
+void n_threaded_linear_scan(hdfsFS fs, std::string path, int threadcount, 
+                                size_t read_size = 128 * KB,
+                                off_t start = 0,
+                                off_t end = 64 * MB) 
+{
+  std::cout << "concurrency max is " << std::thread::hardware_concurrency() << std::endl;
+
+  std::vector<scanner> scanners;
+  std::vector<std::thread> threads;
+
+  //spawn
+  for(int i=0; i< threadcount; i++) {
+    std::cout << "starting thread " << i << std::endl;
+    hdfsFile file = hdfsOpenFile(fs, path.c_str(), 0, 0, 0, 0);
+    scanner s(fs, file, read_size, start, end);
+    scanners.push_back(s);
+    threads.push_back(std::thread(s));
+  }
+
+  //join
+  for(int i=0; i<threadcount; i++) {
+    std::cout << "joining thread " << i << std::endl;
+    threads[i].join();
+    //close file here
+  }
+
+}
 
 
 int main(int argc, char **argv) {
@@ -58,13 +118,10 @@ int main(int argc, char **argv) {
     return 1;
   }
 
-  hdfsFS fs = hdfsConnect(argv[1], std::atoi(argv[2]));  
-  hdfsFile file = hdfsOpenFile(fs, argv[3], 0, 0, 0, 0);
 
-  scan_info s = single_threaded_linear_scan(fs, file);
+  hdfsFS fs = hdfsConnect(argv[1], std::atoi(argv[2]));   
+  n_threaded_linear_scan(fs, argv[3], scan_thread_count, 128*KB, 0, 32*MB);
 
-  std::cout << std::endl << s.str() << std::endl;
-    
 
   return 0;
 }

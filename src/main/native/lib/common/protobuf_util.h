@@ -1,6 +1,8 @@
 #ifndef COMMON_PROTOBUF_UTIL_H_
 #define COMMON_PROTOBUF_UTIL_H_
 
+//#define ASIO_ENABLE_HANDLER_TRACKING
+
 #include "libhdfs++/status.h"
 #include "monad/monad.h"
 #include "monad/asio.h"

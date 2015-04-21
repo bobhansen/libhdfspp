@@ -17,14 +17,9 @@
  */
 
 //Expose a pure C interface that doesn't need any C++/C++11 header files
-//todo: Right now this assumes all "void *stream" parameters are hdfs::InputStreams. 
-//      Because of this we can get the InputStream via static_cast<InputStream*>().
-//      In order to have a stable ABI all streams should have a base class that
-//      can be static_casted to and then typechecked/downcast.
-//todo: This is assuming that the program calling into this only needs to connect
-//      to one hadoop file system.  This is done to keep things simple and speed up
-//      implementation for testing.  hdfs_fs_init should really be returning a pointer
-//      to all state related to that file system.
+//todo: 
+//  Need to be able to pass in parameters to hint at resource allocation like how many threads call run on io_service
+//  It would be nice to be able to pass in counters to gather statistics for filesystem operations
 
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -32,28 +27,14 @@
 
 #include "libhdfs++/chdfs.h"
 #include "libhdfs++/hdfs.h"
-#include <sstream>  //for logs
-#include <fstream>  //for logs
-
 
 #include <iostream>
 #include <string>
 #include <thread>
 
-
-
-
-void log(const std::string& str) {
-  #ifdef CHDFS_LOGGING
-  std::fstream fstr;
-  fstr.open("/home/jclampffer/Desktop/chdfs.log", std::fstream::out | std::fstream::app);
-  fstr << str << std::endl;
-  fstr.close();
-  #endif
-}
-
-
-
+//undefine these and requests will lock up
+#define CHDFS_SERIALIZED_OPEN
+#define CHDFS_SERIALIZED_READ
 
 //---------------------------------------------------------------------------------------
 //  Wrap C++ calls in C
@@ -62,13 +43,14 @@ void log(const std::string& str) {
 using namespace hdfs;
 
 
+//todo: switch back to std::thread
 void *call_run(void *servicePtr) {
   IoService *wrappedService = reinterpret_cast<IoService*>(servicePtr);
-  log("background thread about to call run");
   wrappedService->Run();
   return NULL;
 }
 
+//Copied almost directly from inputstream_test.  Replaced std::thread with pthreads temporarily
 class Executor {
 public:
   Executor() {
@@ -77,19 +59,14 @@ public:
     //Call run on IoService object in a background thread, the run call should never return.
     int ret = pthread_create(&processing_thread, NULL, call_run, reinterpret_cast<void*>(io_service_.get()));
     
-    //log for debug
-    std::stringstream ss;
-    ss << "background thread should be started, pthread_create returned " << ret << " and thread id is " << (unsigned long long)processing_thread;
-    log(ss.str());
-
     if(ret != 0) {
+      //strip out exceptions later
       throw std::runtime_error("unable to start pthread?");
     }
   }
 
   ~Executor() {
-    //stop IoService event loop and background thread.  Don't need this yet
-    log("~Executor called, this should not be happening in vertica yet.");
+    //Stop IoService event loop and background thread.  Don't need this yet.
   }
  
   IoService *io_service() {
@@ -101,16 +78,15 @@ public:
 };
 
 
-
 struct hdfsFile_struct {
-  hdfsFile_struct() : position(0), inputStream(NULL) {};
-  hdfsFile_struct(InputStream *is) : position(0), inputStream(is) {};
+  hdfsFile_struct() : inputStream(NULL) {};
+  hdfsFile_struct(InputStream *is) : inputStream(is) {};
+
   virtual ~hdfsFile_struct() {
     if(NULL != inputStream)
       delete inputStream;
   }
 
-  size_t position; //unused for now
   InputStream *inputStream;
 };
 
@@ -135,23 +111,16 @@ struct hdfsFS_struct {
  *     by passing an allocator/deleter pair as well as specify io_service thread count 
  */
 hdfsFS hdfsConnect(const char *nnhost, unsigned short nnport) {
-  //start io_service
   std::unique_ptr<Executor> background_io_service = std::unique_ptr<Executor>(new Executor());
 
-  if(NULL == background_io_service) {
+  if(NULL == background_io_service) 
     return NULL;
-  }
 
   //connect to NN, fileSystem will be set on success
   FileSystem *fileSystem = NULL;
   Status stat = FileSystem::New(background_io_service->io_service(), nnhost, nnport, &fileSystem);
-  if(!stat.ok()){
+  if(!stat.ok())
     return NULL;
-  }
-
-  std::stringstream ss;
-  ss << "hdfsConnect called. host=" << nnhost << " port=" << nnport << "addressof filesystem = " << reinterpret_cast<unsigned long long>(fileSystem);
-  log(ss.str());
 
   //make a hdfsFS handle
   return new hdfsFS_struct(fileSystem, background_io_service.release());
@@ -159,7 +128,7 @@ hdfsFS hdfsConnect(const char *nnhost, unsigned short nnport) {
 
 
 int hdfsDisconnect(hdfsFS fs) {
-  //likely other stuff to free up, this is mostly just a stub for basic tests
+  //likely other stuff to free up, just stub for short tests
   if(NULL != fs)
     delete fs;  
   else
@@ -167,8 +136,13 @@ int hdfsDisconnect(hdfsFS fs) {
   return 0;
 }
 
-
+#ifdef CHDFS_SERIALIZED_OPEN
+  pthread_mutex_t open_lock = PTHREAD_MUTEX_INITIALIZER;
+#endif
 hdfsFile hdfsOpenFile(hdfsFS fs, const char *path, int flags, int bufferSize, short replication, int blockSize) {
+  #ifdef CHDFS_SERIALIZED_OPEN
+    pthread_mutex_lock(&open_lock);
+  #endif
   //the following four params are just placeholders until write path is finished
   (void)flags;
   (void)bufferSize;
@@ -178,10 +152,12 @@ hdfsFile hdfsOpenFile(hdfsFS fs, const char *path, int flags, int bufferSize, sh
   //assuming we want to do a read with default settings, sufficient for now
   InputStream *isPtr = NULL;
   Status stat = fs->fileSystem->Open(path, &isPtr);
-  if(!stat.ok()) {
+  if(!stat.ok())
     return NULL;
-  }
 
+  #ifdef CHDFS_SERIALIZED_OPEN
+    pthread_mutex_unlock(&open_lock);
+  #endif
   return new hdfsFile_struct(isPtr);
 }
 
@@ -195,8 +171,14 @@ int hdfsCloseFile(hdfsFS fs, hdfsFile file) {
   return 0;
 }
 
-
+#ifdef CHDFS_SERIALIZED_READ
+  pthread_mutex_t read_lock = PTHREAD_MUTEX_INITIALIZER;
+#endif
 size_t hdfsPread(hdfsFS fs, hdfsFile file, off_t position, void *buf, size_t length) {
+  #ifdef CHDFS_SERIALIZED_READ
+    pthread_mutex_lock(&read_lock);  
+  #endif
+
   if(NULL == fs || NULL == file)
     return -1;
 
@@ -206,6 +188,9 @@ size_t hdfsPread(hdfsFS fs, hdfsFile file, off_t position, void *buf, size_t len
     return -1;
   }
 
+  #ifdef CHDFS_SERIALIZED_READ
+    pthread_mutex_unlock(&read_lock);
+  #endif
   return readBytes;
 }
 

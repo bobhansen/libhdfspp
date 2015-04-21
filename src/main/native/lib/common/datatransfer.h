@@ -18,6 +18,8 @@
 #ifndef COMMON_DATA_TRANSFER_H_
 #define COMMON_DATA_TRANSFER_H_
 
+//#define ASIO_ENABLE_HANDLER_TRACKING
+
 #include "sasl_authenticator.h"
 #include "libhdfs++/options.h"
 

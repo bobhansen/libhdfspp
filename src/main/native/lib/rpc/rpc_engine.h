@@ -18,6 +18,8 @@
 #ifndef LIB_RPC_ENGINE_H_
 #define LIB_RPC_ENGINE_H_
 
+//#define ASIO_ENABLE_HANDLER_TRACKING
+
 #include "libhdfs++/status.h"
 
 #include <google/protobuf/message_lite.h>

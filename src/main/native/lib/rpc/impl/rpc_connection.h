@@ -18,6 +18,8 @@
 #ifndef LIB_RPC_IMPL_RPC_CONNECTION_H_
 #define LIB_RPC_IMPL_RPC_CONNECTION_H_
 
+//#define ASIO_ENABLE_HANDLER_TRACKING
+
 #include "RpcHeader.pb.h"
 
 #include "common/protobuf_util.h"

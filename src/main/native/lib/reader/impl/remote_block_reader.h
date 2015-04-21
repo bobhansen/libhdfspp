@@ -18,6 +18,8 @@
 #ifndef IMPL_REMOTE_BLOCK_READER_H_
 #define IMPL_REMOTE_BLOCK_READER_H_
 
+//#define ASIO_ENABLE_HANDLER_TRACKING
+
 #include "common/protobuf_util.h"
 #include "common/datatransfer.h"
 

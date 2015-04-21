@@ -18,6 +18,8 @@
 #ifndef LIB_COMMON_MONAD_ASIO_H_
 #define LIB_COMMON_MONAD_ASIO_H_
 
+//#define ASIO_ENABLE_HANDLER_TRACKING
+
 #include "monad.h"
 #include "common/util.h"
 

@@ -19,6 +19,8 @@
 #ifndef COMMON_LIBHDFSPP_INTERNAL_H_
 #define COMMON_LIBHDFSPP_INTERNAL_H_
 
+//#define ASIO_ENABLE_HANDLER_TRACKING
+
 #include "libhdfs++/hdfs.h"
 
 #include <asio/io_service.hpp>

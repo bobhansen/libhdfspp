@@ -15,11 +15,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+//#define ASIO_ENABLE_HANDLER_TRACKING
 
 #include "filesystem.h"
 
 #include "common/util.h"
-
 #include <asio/ip/tcp.hpp>
 
 #include <limits>

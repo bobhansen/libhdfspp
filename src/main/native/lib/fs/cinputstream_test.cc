@@ -5,6 +5,8 @@
 #include <iostream>
 #include <cstring>
 
+//Simple test that can be run through valgrind to make sure the libhdfs compatible API isn't leaking memory.
+
 
 hdfsFS fs = NULL;
 
