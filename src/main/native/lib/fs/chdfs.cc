@@ -180,12 +180,14 @@ size_t hdfsPread(hdfsFS fs, hdfsFile file, off_t position, void *buf, size_t len
   #endif
 
   if(NULL == fs || NULL == file)
-    return -1;
+    //set errno
+    return 0;   
 
   size_t readBytes = 0;
   Status stat = file->inputStream->PositionRead(buf, length, position, &readBytes);
   if(!stat.ok()) {
-    return -1;
+    //set errno
+    return 0;
   }
 
   #ifdef CHDFS_SERIALIZED_READ
