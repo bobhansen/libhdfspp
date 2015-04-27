@@ -66,7 +66,7 @@ public:
   }
 
   ~Executor() {
-    //Stop IoService event loop and background thread.  Don't need this yet.
+    //Stop IoService event loop and background thread.  Don't need this yet
   }
  
   IoService *io_service() {
