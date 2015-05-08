@@ -28,6 +28,10 @@ enum {
 enum Operation {
   kWriteBlock = 80,
   kReadBlock  = 81,
+
+  kRequestShortCircuitFDs = 87,
+  kReleaseShortCircuitFDs = 88,
+  kRequestShortCircuitSHM = 89
 };
 
 }
