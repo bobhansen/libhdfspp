@@ -150,13 +150,7 @@ int hdfsDisconnect(hdfsFS fs) {
   return 0;
 }
 
-
-//todo: Only the rpc layer isn't thread safe.  Push mutex down to critical areas in RPC so we can push
-//multiple requests over the wire.
-pthread_mutex_t open_lock = PTHREAD_MUTEX_INITIALIZER;
 hdfsFile hdfsOpenFile(hdfsFS fs, const char *path, int flags, int bufferSize, short replication, int blockSize) {
-  pthread_mutex_lock(&open_lock);
-
   //The following four params are just placeholders until write path is finished, add void so compiler doesn't complain.
   (void)flags;
   (void)bufferSize;
@@ -169,8 +163,6 @@ hdfsFile hdfsOpenFile(hdfsFS fs, const char *path, int flags, int bufferSize, sh
   if(!stat.ok())
     return NULL;
 
-  //may need to switch to scoped lock if anything in here can throw.
-  pthread_mutex_unlock(&open_lock);
   return new hdfsFile_struct(isPtr);
 }
 
