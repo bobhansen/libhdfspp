@@ -27,7 +27,7 @@
   <properties>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <protobuf.version>2.5.0</protobuf.version>
-    <hadoop.version>3.0.0-SNAPSHOT</hadoop.version>
+    <hadoop.version>2.6.0</hadoop.version>
     <cmake.plugin.version>2.8.11-b4</cmake.plugin.version>
   </properties>
 
