@@ -106,10 +106,14 @@ struct hdfsFS_struct {
   hdfsFS_struct() : fileSystem(NULL), backgroundIoService(NULL) {};
   hdfsFS_struct(FileSystem *fs, Executor *ex) : fileSystem(fs), backgroundIoService(ex) {};
   virtual ~hdfsFS_struct() {
-    delete fileSystem;
-	fileSystem = NULL;
-    delete backgroundIoService;
-	backgroundIoService = NULL;
+    //todo:  Can't correctly free these structs at the moment due to broken ownership model.
+    //       When reimplementing the C API be really careful about who is responsible for destroying what.
+
+
+    //delete fileSystem;
+	//fileSystem = NULL;
+    //delete backgroundIoService;
+	//backgroundIoService = NULL;
   };
  
   FileSystem *fileSystem;
