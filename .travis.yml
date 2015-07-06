@@ -6,6 +6,6 @@ compiler:
 
 before_install:
         - sudo apt-get update -qq
-        - sudo apt-get install -y libssl-dev libprotobuf-dev libboost-dev
+        - sudo apt-get install -y libssl-dev protobuf-compiler libprotobuf-dev libboost-dev
  
 script: ./scripts/travis_build.sh
